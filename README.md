@@ -1,5 +1,5 @@
-macOS temporary use.  
-Set environment variables both on shell and GUI App.
+ macOS
+ Set environment variables both on shell and GUI App.
 
 ### Installation
 ```   
