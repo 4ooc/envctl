@@ -5,9 +5,11 @@ ENVCTL_LAUNCHD_NAME="envctl.conf.launchd"
 ENVCTL_PLIST_PATH="$HOME/Library/LaunchAgents/$ENVCTL_LAUNCHD_NAME.plist"
 ENVCTL_CONFIG_PATH="$HOME/.config/envctl.conf"
 
-if [[ ! -f $ENVCTL_CONFIG_PATH ]]; then
-  touch "$ENVCTL_CONFIG_PATH"
-fi
+__create_config_if_not_exist() {
+  if [[ ! -f $ENVCTL_CONFIG_PATH ]]; then
+    touch "$ENVCTL_CONFIG_PATH"
+  fi
+}
 
 __echo_red() {
   echo -e "\033[1;31m$1\033[0m"
@@ -15,6 +17,12 @@ __echo_red() {
 
 __echo_green() {
   echo -e "\033[1;32m$1\033[0m"
+}
+
+__envctl_match_key() {
+  configs=$(cat "$ENVCTL_CONFIG_PATH")
+  [[ $configs =~ $1=(.*) ]]
+  echo "${BASH_REMATCH[1]}"
 }
 
 __envctl_update_plist() {
@@ -56,7 +64,7 @@ __envctl_list() {
     elif [ "$v" == "$launchValue" ]; then
       __echo_green "$k=$v"
     else
-      __echo_green "$k=$v (Why launchd: $launchValue)"
+      __echo_green "$k=$v (From where: $launchValue)"
     fi
   done <"${ENVCTL_CONFIG_PATH}"
 }
@@ -68,26 +76,20 @@ __envctl_get() {
     exit 1
   fi
 
-  value=""
-  while IFS='=' read -r k v; do
-    if [[ $k == "$key" ]]; then
-      value=$v
-      break
-    fi
-  done <"${ENVCTL_CONFIG_PATH}"
+  value=$(__envctl_match_key "$key")
   launchValue=$(launchctl getenv "$key")
 
   if [[ -z $launchValue ]]; then
-    if [[ -n $value ]]; then
-      __echo_green "$value (Not Launchd)"
-    else
+    if [[ -z $value ]]; then
       __echo_red "No variable"
+    else
+      __echo_green "$value (Not Launchd)"
     fi
   else
     if [[ -z $value ]]; then
       __echo_red "$launchValue (Not managed)"
     elif [ "$value" != "$launchValue" ]; then
-      __echo_red "$value (Why launchd: $launchValue)"
+      __echo_red "$value (From where: $launchValue)"
     else
       __echo_green "$value"
     fi
@@ -101,9 +103,9 @@ __envctl_unset() {
     exit 1
   fi
 
-  line=$(grep "$key=" "$ENVCTL_CONFIG_PATH")
-  if [[ -n $line ]]; then
-    launchctl unsetenv "$key"
+  launchctl unsetenv "$key"
+  value=$(__envctl_match_key "$key")
+  if [[ -n $value ]]; then
     sed -i "" "/$key=/d" "$ENVCTL_CONFIG_PATH"
   fi
 }
@@ -116,21 +118,15 @@ __envctl_set() {
     exit 1
   fi
 
-  oldValue=""
   replace=1
-  while IFS='=' read -r k v; do
-    if [[ $k == "$key" ]]; then
-      oldValue=$v
-      break
-    fi
-  done <"${ENVCTL_CONFIG_PATH}"
+  oldValue=$(__envctl_match_key "$key")
   if [[ -z $oldValue ]]; then
     oldValue=$(launchctl getenv "$key")
     replace=0
   fi
 
   if [[ -n $oldValue && $oldValue != "$value" ]]; then
-    read -r -n 1 -t 30 -p "Please make sure set '$key' from '$oldValue' to '$value': 'Y/n'" j
+    read -r -n 1 -t 30 -p "Continue set '$key' from '$oldValue' to '$value': 'Y/n'" j
     echo ""
     if [[ $j != "Y" ]]; then
       __echo_red "Not replace $key=$value"
@@ -138,43 +134,35 @@ __envctl_set() {
     fi
   fi
 
+  launchctl setenv "$key" "$value"
   if [[ $replace == 1 ]]; then
     sed -i "" "s# $key=.*# $key=$value#g" "$ENVCTL_CONFIG_PATH"
   else
     echo "$key=$value" >>"$ENVCTL_CONFIG_PATH"
   fi
-
-  result=$(launchctl setenv "$key" "$value")
-  if [[ ! $result ]]; then
-    __echo_green "Set $key=$value"
-  else
-    if [[ $replace == 1 ]]; then
-      sed -i "" "s#$key=.*#$key=$oldValue#g" "$ENVCTL_CONFIG_PATH"
-    else
-      sed -i "" "/$key=/d" "$ENVCTL_CONFIG_PATH"
-    fi
-    __echo_red "Set $key failed"
-    exit 1
-  fi
+  __echo_green "Set $key=$value"
 }
 
 __envctl_load() {
+  __echo_green "Load env:"
   while IFS='=' read -r k v; do
     launchValue=$(launchctl getenv "$k")
     launchctl setenv "$k" "$v"
     if [[ -z $launchValue ]]; then
-      __echo_green "$k=$v"
+      __echo_green "    $k=$v"
     elif [ "$v" == "$launchValue" ]; then
-      __echo_green "$k=$v"
+      __echo_green "    $k=$v"
     else
-      __echo_green "$k=$launchValue => $k=v"
+      __echo_green "    $k=$launchValue => $k=v"
     fi
   done <"${ENVCTL_CONFIG_PATH}"
 }
 
 __envctl_unload() {
+  __echo_green "Unload env:"
   while IFS='=' read -r k v; do
     launchctl unsetenv "$k"
+    __echo_green "    $k=$v"
   done <"${ENVCTL_CONFIG_PATH}"
 }
 
@@ -212,4 +200,5 @@ __envctl_parse_args() {
   fi
 }
 
+__create_config_if_not_exist
 __envctl_parse_args "$@"
