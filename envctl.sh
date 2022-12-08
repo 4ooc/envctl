@@ -25,6 +25,27 @@ __envctl_match_key() {
   echo "${BASH_REMATCH[1]}"
 }
 
+__envctl_key_print() {
+  configValue=$1
+  launchValue=$2
+
+  if [[ -n $launchValue ]]; then
+    if [[ -z $configValue ]]; then
+      __echo_red "(Unknown override: $launchValue)"
+    elif [ "$configValue" != "$launchValue" ]; then
+      __echo_red "$configValue (Unknown override: $launchValue)"
+    else
+      __echo_green "$configValue"
+    fi
+  else
+    if [[ -z $configValue ]]; then
+      __echo_red "No variable"
+    else
+      __echo_green "$configValue (Not Launchd)"
+    fi
+  fi
+}
+
 __envctl_update_plist() {
   cat >"${ENVCTL_PLIST_PATH}" <<EOF
     <?xml version="1.0" encoding="UTF-8"?>
@@ -59,13 +80,7 @@ __envctl_load_service() {
 __envctl_list() {
   while IFS='=' read -r k v; do
     launchValue=$(launchctl getenv "$k")
-    if [[ -z $launchValue ]]; then
-      __echo_green "$k=$v (Not launchd)"
-    elif [ "$v" == "$launchValue" ]; then
-      __echo_green "$k=$v"
-    else
-      __echo_green "$k=$v (From where: $launchValue)"
-    fi
+    __envctl_key_print "$v", "$launchValue"
   done <"${ENVCTL_CONFIG_PATH}"
 }
 
@@ -76,24 +91,10 @@ __envctl_get() {
     exit 1
   fi
 
-  value=$(__envctl_match_key "$key")
+  configValue=$(__envctl_match_key "$key")
   launchValue=$(launchctl getenv "$key")
 
-  if [[ -z $launchValue ]]; then
-    if [[ -z $value ]]; then
-      __echo_red "No variable"
-    else
-      __echo_green "$value (Not Launchd)"
-    fi
-  else
-    if [[ -z $value ]]; then
-      __echo_red "$launchValue (Not managed)"
-    elif [ "$value" != "$launchValue" ]; then
-      __echo_red "$value (From where: $launchValue)"
-    else
-      __echo_green "$value"
-    fi
-  fi
+  __envctl_key_print "$configValue", "$launchValue"
 }
 
 __envctl_unset() {
