@@ -80,7 +80,7 @@ __envctl_load_service() {
 __envctl_list() {
   while IFS='=' read -r k v; do
     launchValue=$(launchctl getenv "$k")
-    __envctl_key_print "$v", "$launchValue"
+    __envctl_key_print "$v" "$launchValue"
   done <"${ENVCTL_CONFIG_PATH}"
 }
 
@@ -94,7 +94,7 @@ __envctl_get() {
   configValue=$(__envctl_match_key "$key")
   launchValue=$(launchctl getenv "$key")
 
-  __envctl_key_print "$configValue", "$launchValue"
+  __envctl_key_print "$configValue" "$launchValue"
 }
 
 __envctl_unset() {
