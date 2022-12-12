@@ -28,20 +28,21 @@ __envctl_match_key() {
 __envctl_key_print() {
   configValue=$1
   launchValue=$2
+  key=$3
 
   if [[ -n $launchValue ]]; then
     if [[ -z $configValue ]]; then
-      __echo_red "(Unknown override: $launchValue)"
+      __echo_red "$key  (Unknown override: $launchValue)"
     elif [ "$configValue" != "$launchValue" ]; then
-      __echo_red "$configValue (Unknown override: $launchValue)"
+      __echo_red "$key  $configValue (Unknown override: $launchValue)"
     else
-      __echo_green "$configValue"
+      __echo_green "$key  $configValue"
     fi
   else
     if [[ -z $configValue ]]; then
       __echo_red "No variable"
     else
-      __echo_green "$configValue (Not Launchd)"
+      __echo_green "$key  $configValue (Not Launchd)"
     fi
   fi
 }
@@ -80,7 +81,7 @@ __envctl_load_service() {
 __envctl_list() {
   while IFS='=' read -r k v; do
     launchValue=$(launchctl getenv "$k")
-    __envctl_key_print "$v" "$launchValue"
+    __envctl_key_print "$v" "$launchValue" "$k"
   done <"${ENVCTL_CONFIG_PATH}"
 }
 
